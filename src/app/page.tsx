@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
@@ -84,10 +85,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/50">
-              <img
+              <Image
                 src={assets.logo}
                 alt="Breakthrough Fitness"
-                className="w-10 h-10 object-cover rounded-full"
+                width={40}
+                height={40}
+                className="object-cover rounded-full"
               />
             </div>
             <div>
@@ -109,10 +112,12 @@ export default function Home() {
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Background Image */}
         <div className="absolute inset-0">
-          <img
+          <Image
             src={assets.heroBackground}
             alt="Gym"
-            className="w-full h-full object-cover opacity-40"
+            fill
+            className="object-cover opacity-40"
+            priority
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black" />
         </div>
@@ -242,7 +247,7 @@ export default function Home() {
               THE <span className="text-red-600">BREAKTHROUGH</span> DIFFERENCE
             </h2>
             <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-              We don't just train bodies. We transform lives through personalized coaching and unwavering support.
+              We don&apos;t just train bodies. We transform lives through personalized coaching and unwavering support.
             </p>
           </motion.div>
 
@@ -303,7 +308,7 @@ export default function Home() {
                   <Award className="w-12 h-12 text-red-600 mb-6 group-hover:scale-110 transition-transform" />
                   <h4 className="text-2xl font-bold text-white mb-2">{transformation.name}</h4>
                   <div className="text-red-600 font-bold text-lg mb-4">{transformation.result}</div>
-                  <p className="text-gray-400 italic leading-relaxed">"{transformation.quote}"</p>
+                  <p className="text-gray-400 italic leading-relaxed">&ldquo;{transformation.quote}&rdquo;</p>
                 </Card>
               </motion.div>
             ))}
@@ -398,10 +403,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/50">
-              <img
+              <Image
                 src={assets.logo}
                 alt="Breakthrough Fitness"
-                className="w-12 h-12 object-cover rounded-full"
+                width={48}
+                height={48}
+                className="object-cover rounded-full"
               />
             </div>
             <div className="text-left">
