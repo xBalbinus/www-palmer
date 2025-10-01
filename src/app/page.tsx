@@ -5,16 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
-import GenerateAssets from "@/components/GenerateAssets";
-
-interface Assets {
-  logo: string;
-  heroBackground: string;
-}
 
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
-  const [assets, setAssets] = useState<Assets | null>(null);
+  
+  // Static assets
+  const assets = {
+    logo: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop&crop=face",
+    heroBackground: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1920&h=1080&fit=crop"
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -71,9 +70,6 @@ export default function Home() {
     }
   ];
 
-  if (!assets) {
-    return <GenerateAssets onAssetsGenerated={setAssets} />;
-  }
 
   return (
     <div className="min-h-screen bg-black">
