@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles, Phone, LogIn } from "lucide-react";
+import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles, LogIn } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import Image from "next/image";
@@ -148,10 +148,6 @@ export default function Home() {
             
             {/* CTA Section */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <a href="tel:+1234567890" className="hidden md:flex items-center gap-2 text-white font-black text-lg xl:text-xl tracking-wide hover:text-red-300 transition-colors drop-shadow-lg">
-                <Phone className="w-5 h-5" />
-                (123) 456-7890
-              </a>
               <Button
                 onClick={openCalendly}
                 className="bg-red-800 hover:bg-red-900 text-white font-medium px-4 py-2 sm:px-6 sm:py-2.5 lg:px-8 lg:py-3 text-xs sm:text-sm lg:text-base rounded-full shadow-sm hover:shadow-md transition-all hover:scale-105"
@@ -160,11 +156,6 @@ export default function Home() {
                 <span className="hidden sm:inline">Book Your Call</span>
                 <span className="sm:hidden">Book</span>
               </Button>
-              
-              {/* Mobile Phone Button */}
-              <a href="tel:+1234567890" className="md:hidden bg-red-800/90 hover:bg-red-900 text-white p-2 rounded-full transition-all shadow-sm hover:shadow-md">
-                <Phone className="w-4 h-4" />
-              </a>
 
               {/* Client Login Button */}
               <Link
