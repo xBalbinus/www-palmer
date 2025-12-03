@@ -60,9 +60,33 @@ export const clientNotes = pgTable(
   ]
 );
 
+/**
+ * Exercise logs - track strength training progress
+ */
+export const exerciseLogs = pgTable(
+  "exercise_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    exercise: varchar("exercise", { length: 100 }).notNull(), // e.g., "Bench Press", "Squat"
+    weight: decimal("weight", { precision: 6, scale: 2 }).notNull(), // in lbs
+    reps: integer("reps").notNull(),
+    sets: integer("sets").default(1),
+    notes: text("notes"), // optional notes for this lift
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_exercise_logs_client_id").on(table.clientId),
+    index("idx_exercise_logs_exercise").on(table.exercise),
+    index("idx_exercise_logs_created").on(table.createdAt),
+  ]
+);
+
 // Type exports
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type ClientNote = typeof clientNotes.$inferSelect;
 export type NewClientNote = typeof clientNotes.$inferInsert;
+export type ExerciseLog = typeof exerciseLogs.$inferSelect;
+export type NewExerciseLog = typeof exerciseLogs.$inferInsert;
 

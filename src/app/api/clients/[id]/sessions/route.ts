@@ -42,7 +42,31 @@ export async function PUT(
             { status: 400 }
           );
         }
+        const oldRemaining = client.sessionsRemaining;
         newSessionsRemaining = Math.max(0, count);
+        
+        // If adding sessions, increase totalSessions too
+        // If removing sessions (using them), totalSessions stays the same
+        if (count > oldRemaining) {
+          const added = count - oldRemaining;
+          newTotalSessions = client.totalSessions + added;
+        }
+        // If count < oldRemaining, we're marking sessions as used
+        // so we update lastSessionDate
+        if (count < oldRemaining) {
+          newLastSessionDate = new Date();
+        }
+        break;
+      case "reset":
+        // Reset both remaining and total to the same value (new package)
+        if (typeof count !== "number") {
+          return NextResponse.json(
+            { error: "Count is required for reset action" },
+            { status: 400 }
+          );
+        }
+        newSessionsRemaining = Math.max(0, count);
+        newTotalSessions = Math.max(0, count);
         break;
       default:
         return NextResponse.json(

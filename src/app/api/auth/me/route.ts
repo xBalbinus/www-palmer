@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { db, clients, clientNotes, eq, desc } from "@/db";
+import { db, clients, clientNotes, exerciseLogs, eq, desc } from "@/db";
 
 export async function GET() {
   try {
@@ -37,6 +37,14 @@ export async function GET() {
       .where(eq(clientNotes.clientId, client.id))
       .orderBy(desc(clientNotes.createdAt));
 
+    // Get exercise logs (recent 20)
+    const exercises = await db
+      .select()
+      .from(exerciseLogs)
+      .where(eq(exerciseLogs.clientId, client.id))
+      .orderBy(desc(exerciseLogs.createdAt))
+      .limit(20);
+
     return NextResponse.json({
       user: {
         id: client.id,
@@ -46,14 +54,20 @@ export async function GET() {
         sessionsRemaining: client.sessionsRemaining,
         totalSessions: client.totalSessions,
         goals: client.goals,
-        currentWeight: client.currentWeight ? parseFloat(client.currentWeight) : null,
-        targetWeight: client.targetWeight ? parseFloat(client.targetWeight) : null,
         lastSessionDate: client.lastSessionDate?.toISOString().split("T")[0] || null,
         createdAt: client.createdAt.toISOString().split("T")[0],
         notes: notes.map((n) => ({
           id: n.id,
           date: n.createdAt.toISOString().split("T")[0],
           content: n.content,
+        })),
+        exercises: exercises.map((e) => ({
+          id: e.id,
+          exercise: e.exercise,
+          weight: parseFloat(e.weight),
+          reps: e.reps,
+          sets: e.sets,
+          date: e.createdAt.toISOString().split("T")[0],
         })),
       },
     });

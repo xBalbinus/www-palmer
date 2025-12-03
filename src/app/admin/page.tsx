@@ -32,6 +32,16 @@ interface Note {
   content: string;
 }
 
+interface ExerciseLog {
+  id: string;
+  exercise: string;
+  weight: number;
+  reps: number;
+  sets: number;
+  notes: string | null;
+  date: string;
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -40,11 +50,10 @@ interface Customer {
   sessionsRemaining: number;
   totalSessions: number;
   notes: Note[];
+  exercises: ExerciseLog[];
   createdAt: string;
   lastSessionDate: string | null;
   goals: string;
-  currentWeight: number | null;
-  targetWeight: number | null;
   xorsUserId?: string;
   xorsApiKey?: string;
 }
@@ -68,7 +77,6 @@ export default function AdminPage() {
   const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState<{ customerId: string; noteId: string | null } | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
-  const [sessionInput, setSessionInput] = useState("");
   const [newClientCredentials, setNewClientCredentials] = useState<NewClientCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -78,15 +86,24 @@ export default function AdminPage() {
     phone: "",
     sessionsRemaining: 10,
     goals: "",
-    currentWeight: "",
-    targetWeight: "",
   });
 
   const [editForm, setEditForm] = useState({
     goals: "",
-    currentWeight: "",
-    targetWeight: "",
   });
+
+  const [newExercise, setNewExercise] = useState({
+    exercise: "",
+    weight: "",
+    reps: "",
+    sets: "1",
+  });
+
+  // Local session counts for optimistic UI (allows +/- without API calls)
+  const [localSessions, setLocalSessions] = useState<Record<string, number>>({});
+  const [resetInputs, setResetInputs] = useState<Record<string, string>>({});
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -147,8 +164,6 @@ export default function AdminPage() {
           phone: newCustomer.phone,
           sessionsRemaining: newCustomer.sessionsRemaining,
           goals: newCustomer.goals,
-          currentWeight: newCustomer.currentWeight ? parseFloat(newCustomer.currentWeight) : null,
-          targetWeight: newCustomer.targetWeight ? parseFloat(newCustomer.targetWeight) : null,
         }),
       });
 
@@ -158,7 +173,7 @@ export default function AdminPage() {
         throw new Error(data.error || "Failed to create client");
       }
 
-      setCustomers([data.client, ...customers]);
+      setCustomers([{ ...data.client, exercises: [] }, ...customers]);
       setNewClientCredentials(data.credentials);
       setNewCustomer({
         name: "",
@@ -166,8 +181,6 @@ export default function AdminPage() {
         phone: "",
         sessionsRemaining: 10,
         goals: "",
-        currentWeight: "",
-        targetWeight: "",
       });
       setShowCreateForm(false);
     } catch (err) {
@@ -177,13 +190,37 @@ export default function AdminPage() {
     }
   };
 
-  const handleUpdateSessions = async (customerId: string, action: "increment" | "decrement" | "set", count?: number) => {
+  // Get the displayed session count (local override or server value)
+  const getDisplayedSessions = (customer: Customer) => {
+    return localSessions[customer.id] ?? customer.sessionsRemaining;
+  };
+
+  // Check if local differs from server
+  const hasUnsavedChanges = (customer: Customer) => {
+    return localSessions[customer.id] !== undefined && 
+           localSessions[customer.id] !== customer.sessionsRemaining;
+  };
+
+  // Local +/- (no API call)
+  const adjustLocalSessions = (customerId: string, delta: number) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+    const current = localSessions[customerId] ?? customer.sessionsRemaining;
+    const newValue = Math.max(0, current + delta);
+    setLocalSessions({ ...localSessions, [customerId]: newValue });
+  };
+
+  // Commit to server
+  const handleSaveSessions = async (customerId: string) => {
+    const newCount = localSessions[customerId];
+    if (newCount === undefined) return;
+
     setActionLoading(`sessions-${customerId}`);
     try {
       const response = await fetch(`/api/clients/${customerId}/sessions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, count }),
+        body: JSON.stringify({ action: "set", count: newCount }),
       });
 
       if (!response.ok) throw new Error("Failed to update sessions");
@@ -194,9 +231,40 @@ export default function AdminPage() {
           ? { ...c, ...data.client }
           : c
       ));
-      setSessionInput("");
+      // Clear local override since server is now in sync
+      const { [customerId]: _, ...rest } = localSessions;
+      setLocalSessions(rest);
     } catch (err) {
       console.error("Error updating sessions:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Reset session package (sets both remaining AND total)
+  const handleResetPackage = async (customerId: string) => {
+    const count = parseInt(resetInputs[customerId] || "");
+    if (isNaN(count)) return;
+
+    setActionLoading(`reset-${customerId}`);
+    try {
+      const response = await fetch(`/api/clients/${customerId}/sessions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset", count }),
+      });
+
+      if (!response.ok) throw new Error("Failed to reset sessions");
+
+      const data = await response.json();
+      setCustomers(customers.map((c) => 
+        c.id === customerId 
+          ? { ...c, ...data.client }
+          : c
+      ));
+      setResetInputs({ ...resetInputs, [customerId]: "" });
+    } catch (err) {
+      console.error("Error resetting sessions:", err);
     } finally {
       setActionLoading(null);
     }
@@ -259,8 +327,6 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           goals: editForm.goals,
-          currentWeight: editForm.currentWeight ? parseFloat(editForm.currentWeight) : null,
-          targetWeight: editForm.targetWeight ? parseFloat(editForm.targetWeight) : null,
         }),
       });
 
@@ -275,6 +341,59 @@ export default function AdminPage() {
       setEditingCustomer(null);
     } catch (err) {
       console.error("Error updating customer:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAddExercise = async (customerId: string) => {
+    if (!newExercise.exercise.trim() || !newExercise.weight || !newExercise.reps) return;
+    setActionLoading(`exercise-${customerId}`);
+
+    try {
+      const response = await fetch(`/api/clients/${customerId}/exercises`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise: newExercise.exercise,
+          weight: parseFloat(newExercise.weight),
+          reps: parseInt(newExercise.reps),
+          sets: parseInt(newExercise.sets) || 1,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to add exercise");
+
+      const data = await response.json();
+      setCustomers(customers.map((c) => 
+        c.id === customerId 
+          ? { ...c, exercises: [data.exercise, ...(c.exercises || [])] }
+          : c
+      ));
+      setNewExercise({ exercise: "", weight: "", reps: "", sets: "1" });
+    } catch (err) {
+      console.error("Error adding exercise:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteExercise = async (customerId: string, exerciseId: string) => {
+    setActionLoading(`delete-exercise-${exerciseId}`);
+    try {
+      const response = await fetch(`/api/clients/${customerId}/exercises/${exerciseId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("Failed to delete exercise");
+
+      setCustomers(customers.map((c) => 
+        c.id === customerId 
+          ? { ...c, exercises: (c.exercises || []).filter((e) => e.id !== exerciseId) }
+          : c
+      ));
+    } catch (err) {
+      console.error("Error deleting exercise:", err);
     } finally {
       setActionLoading(null);
     }
@@ -304,8 +423,6 @@ export default function AdminPage() {
     setEditingCustomer(customer.id);
     setEditForm({
       goals: customer.goals || "",
-      currentWeight: customer.currentWeight?.toString() || "",
-      targetWeight: customer.targetWeight?.toString() || "",
     });
   };
 
@@ -635,26 +752,6 @@ export default function AdminPage() {
                         disabled={actionLoading === "create"}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Current Weight (lbs)</label>
-                      <input
-                        type="number"
-                        value={newCustomer.currentWeight}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, currentWeight: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-800"
-                        disabled={actionLoading === "create"}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Target Weight (lbs)</label>
-                      <input
-                        type="number"
-                        value={newCustomer.targetWeight}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, targetWeight: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-800"
-                        disabled={actionLoading === "create"}
-                      />
-                    </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-300 mb-1">Goals</label>
                       <textarea
@@ -732,47 +829,54 @@ export default function AdminPage() {
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-6">
-                            {/* Sessions Counter */}
-                            <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3">
+                            {/* Sessions Counter - local updates, then Set to save */}
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                               <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateSessions(customer.id, "decrement");
-                                }}
+                                onClick={() => adjustLocalSessions(customer.id, -1)}
                                 size="sm"
-                                className="bg-red-900/50 hover:bg-red-900 text-white h-9 w-9 p-0"
-                                disabled={actionLoading === `sessions-${customer.id}`}
+                                className="bg-red-900/50 hover:bg-red-900 text-white h-8 w-8 p-0"
+                                disabled={getDisplayedSessions(customer) === 0}
                               >
-                                {actionLoading === `sessions-${customer.id}` ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Minus className="w-4 h-4" />
-                                )}
+                                <Minus className="w-4 h-4" />
                               </Button>
-                              <div className="text-center min-w-[60px]">
+                              <div className="text-center min-w-[50px]">
                                 <div className={`text-2xl font-bold ${
-                                  customer.sessionsRemaining <= 3 
-                                    ? "text-amber-400" 
-                                    : customer.sessionsRemaining === 0 
-                                      ? "text-red-400" 
-                                      : "text-white"
+                                  hasUnsavedChanges(customer)
+                                    ? "text-blue-400"
+                                    : getDisplayedSessions(customer) <= 3 && getDisplayedSessions(customer) > 0
+                                      ? "text-amber-400" 
+                                      : getDisplayedSessions(customer) === 0 
+                                        ? "text-red-400" 
+                                        : "text-white"
                                 }`}>
-                                  {customer.sessionsRemaining}
+                                  {getDisplayedSessions(customer)}
                                 </div>
                                 <div className="text-xs text-gray-500">sessions</div>
                               </div>
                               <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateSessions(customer.id, "increment");
-                                }}
+                                onClick={() => adjustLocalSessions(customer.id, 1)}
                                 size="sm"
-                                className="bg-green-900/50 hover:bg-green-900 text-white h-9 w-9 p-0"
-                                disabled={actionLoading === `sessions-${customer.id}`}
+                                className="bg-green-900/50 hover:bg-green-900 text-white h-8 w-8 p-0"
                               >
                                 <Plus className="w-4 h-4" />
                               </Button>
+                              
+                              {/* Set button - only shows when there are unsaved changes */}
+                              {hasUnsavedChanges(customer) && (
+                                <Button
+                                  onClick={() => handleSaveSessions(customer.id)}
+                                  size="sm"
+                                  className="bg-blue-700 hover:bg-blue-800 text-white h-8 px-3 ml-1"
+                                  disabled={actionLoading === `sessions-${customer.id}`}
+                                >
+                                  {actionLoading === `sessions-${customer.id}` ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Save className="w-3 h-3" />
+                                  )}
+                                </Button>
+                              )}
                             </div>
                             
                             <div className="text-gray-500">
@@ -809,7 +913,37 @@ export default function AdminPage() {
                             </div>
                           </div>
 
-                          {/* Goals and Weight */}
+                          {/* New Session Package */}
+                          <div className="bg-gray-800/30 rounded-lg p-4">
+                            <h4 className="font-medium text-gray-300 text-sm mb-3">New Session Package</h4>
+                            <p className="text-gray-500 text-xs mb-3">
+                              Reset session count when client purchases a new package
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={resetInputs[customer.id] || ""}
+                                onChange={(e) => setResetInputs({...resetInputs, [customer.id]: e.target.value})}
+                                placeholder="Enter sessions"
+                                className="w-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-800"
+                                min="0"
+                              />
+                              <Button
+                                onClick={() => handleResetPackage(customer.id)}
+                                size="sm"
+                                className="bg-purple-800 hover:bg-purple-900 text-white px-4"
+                                disabled={actionLoading === `reset-${customer.id}` || !resetInputs[customer.id]}
+                              >
+                                {actionLoading === `reset-${customer.id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  "Set New Package"
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Goals */}
                           {editingCustomer === customer.id ? (
                             <div className="bg-gray-800/30 rounded-lg p-4 space-y-4">
                               <div>
@@ -820,26 +954,6 @@ export default function AdminPage() {
                                   rows={2}
                                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-800 resize-none"
                                 />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-400 mb-1">Current Weight</label>
-                                  <input
-                                    type="number"
-                                    value={editForm.currentWeight}
-                                    onChange={(e) => setEditForm({ ...editForm, currentWeight: e.target.value })}
-                                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-800"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-400 mb-1">Target Weight</label>
-                                  <input
-                                    type="number"
-                                    value={editForm.targetWeight}
-                                    onChange={(e) => setEditForm({ ...editForm, targetWeight: e.target.value })}
-                                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-800"
-                                  />
-                                </div>
                               </div>
                               <div className="flex gap-2 justify-end">
                                 <Button
@@ -867,9 +981,9 @@ export default function AdminPage() {
                             </div>
                           ) : (
                             <div className="bg-gray-800/30 rounded-lg p-4">
-                              <div className="flex justify-between items-start mb-3">
+                              <div className="flex justify-between items-start mb-2">
                                 <h4 className="font-medium text-gray-300 flex items-center gap-2">
-                                  <Target className="w-4 h-4" /> Goals & Progress
+                                  <Target className="w-4 h-4" /> Goals
                                 </h4>
                                 <Button
                                   onClick={() => startEditing(customer)}
@@ -880,35 +994,114 @@ export default function AdminPage() {
                                   <Edit className="w-4 h-4" />
                                 </Button>
                               </div>
-                              <p className="text-white mb-3">{customer.goals || "No goals set"}</p>
-                              {(customer.currentWeight || customer.targetWeight) && (
-                                <div className="flex gap-6">
-                                  {customer.currentWeight && (
-                                    <div>
-                                      <span className="text-gray-500 text-sm">Current: </span>
-                                      <span className="text-white font-medium">{customer.currentWeight} lbs</span>
-                                    </div>
-                                  )}
-                                  {customer.targetWeight && (
-                                    <div>
-                                      <span className="text-gray-500 text-sm">Target: </span>
-                                      <span className="text-white font-medium">{customer.targetWeight} lbs</span>
-                                    </div>
-                                  )}
-                                  {customer.currentWeight && customer.targetWeight && (
-                                    <div>
-                                      <span className="text-gray-500 text-sm">To go: </span>
-                                      <span className={`font-medium ${
-                                        customer.currentWeight > customer.targetWeight ? "text-amber-400" : "text-green-400"
-                                      }`}>
-                                        {Math.abs(customer.currentWeight - customer.targetWeight)} lbs
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                              <p className="text-white whitespace-pre-wrap">{customer.goals || "No goals set"}</p>
                             </div>
                           )}
+
+                          {/* Exercise Log */}
+                          <div className="bg-gray-800/30 rounded-lg p-4">
+                            <h4 className="font-medium text-gray-300 flex items-center gap-2 mb-3">
+                              <Activity className="w-4 h-4" /> Exercise Log
+                            </h4>
+                            
+                            {/* Add Exercise Form */}
+                            <div className="flex flex-wrap gap-2 mb-4 bg-gray-800/50 rounded-lg p-3">
+                              <input
+                                type="text"
+                                value={newExercise.exercise}
+                                onChange={(e) => setNewExercise({...newExercise, exercise: e.target.value})}
+                                placeholder="Exercise (e.g. Bench Press)"
+                                className="flex-1 min-w-[140px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-800"
+                              />
+                              <input
+                                type="number"
+                                value={newExercise.weight}
+                                onChange={(e) => setNewExercise({...newExercise, weight: e.target.value})}
+                                placeholder="Weight"
+                                className="w-20 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-800"
+                              />
+                              <span className="text-gray-500 self-center text-sm">lbs ×</span>
+                              <input
+                                type="number"
+                                value={newExercise.reps}
+                                onChange={(e) => setNewExercise({...newExercise, reps: e.target.value})}
+                                placeholder="Reps"
+                                className="w-16 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-800"
+                              />
+                              <span className="text-gray-500 self-center text-sm">×</span>
+                              <input
+                                type="number"
+                                value={newExercise.sets}
+                                onChange={(e) => setNewExercise({...newExercise, sets: e.target.value})}
+                                placeholder="Sets"
+                                className="w-16 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-800"
+                                min="1"
+                              />
+                              <Button
+                                onClick={() => handleAddExercise(customer.id)}
+                                size="sm"
+                                className="bg-green-800 hover:bg-green-900 text-white px-3"
+                                disabled={actionLoading === `exercise-${customer.id}` || !newExercise.exercise || !newExercise.weight || !newExercise.reps}
+                              >
+                                {actionLoading === `exercise-${customer.id}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Plus className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
+
+                            {/* Exercise List */}
+                            {(!customer.exercises || customer.exercises.length === 0) ? (
+                              <p className="text-gray-500 text-sm italic">No exercises logged yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {(expandedExercises[customer.id] 
+                                  ? customer.exercises 
+                                  : customer.exercises.slice(0, 5)
+                                ).map((ex) => (
+                                  <div
+                                    key={ex.id}
+                                    className="flex items-center justify-between bg-gray-800/50 rounded px-3 py-2 group"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-white font-medium">{ex.exercise}</span>
+                                      <span className="text-green-400 font-mono text-sm">
+                                        {ex.weight}lbs × {ex.reps} × {ex.sets}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-xs text-gray-500">{ex.date}</span>
+                                      <button
+                                        onClick={() => handleDeleteExercise(customer.id, ex.id)}
+                                        className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        disabled={actionLoading === `delete-exercise-${ex.id}`}
+                                      >
+                                        {actionLoading === `delete-exercise-${ex.id}` ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {customer.exercises.length > 5 && (
+                                  <button
+                                    onClick={() => setExpandedExercises({
+                                      ...expandedExercises,
+                                      [customer.id]: !expandedExercises[customer.id]
+                                    })}
+                                    className="text-sm text-gray-400 hover:text-white transition-colors w-full text-center py-2"
+                                  >
+                                    {expandedExercises[customer.id] 
+                                      ? `Show less` 
+                                      : `Show ${customer.exercises.length - 5} more`}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                           {/* Notes Section */}
                           <div>
@@ -966,8 +1159,11 @@ export default function AdminPage() {
                             {customer.notes.length === 0 ? (
                               <p className="text-gray-500 text-sm italic">No notes yet.</p>
                             ) : (
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {customer.notes.map((note) => (
+                              <div className="space-y-2">
+                                {(expandedNotes[customer.id] 
+                                  ? customer.notes 
+                                  : customer.notes.slice(0, 3)
+                                ).map((note) => (
                                   <div
                                     key={note.id}
                                     className="bg-gray-800/50 rounded-lg p-3 group relative"
@@ -989,54 +1185,38 @@ export default function AdminPage() {
                                     <p className="text-gray-300 text-sm mt-1">{note.content}</p>
                                   </div>
                                 ))}
+                                {customer.notes.length > 3 && (
+                                  <button
+                                    onClick={() => setExpandedNotes({
+                                      ...expandedNotes,
+                                      [customer.id]: !expandedNotes[customer.id]
+                                    })}
+                                    className="text-sm text-gray-400 hover:text-white transition-colors w-full text-center py-2"
+                                  >
+                                    {expandedNotes[customer.id] 
+                                      ? `Show less` 
+                                      : `Show ${customer.notes.length - 3} more notes`}
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
 
-                          {/* Set Sessions */}
-                          <div className="pt-4 border-t border-gray-800 space-y-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Set Sessions Directly
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="number"
-                                  value={sessionInput}
-                                  onChange={(e) => setSessionInput(e.target.value)}
-                                  placeholder="Enter number"
-                                  className="w-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-800"
-                                  min="0"
-                                />
-                                <Button
-                                  onClick={() => {
-                                    const count = parseInt(sessionInput);
-                                    if (!isNaN(count)) {
-                                      handleUpdateSessions(customer.id, "set", count);
-                                    }
-                                  }}
-                                  className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2"
-                                  disabled={actionLoading === `sessions-${customer.id}`}
-                                >
-                                  Set
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="flex justify-end">
-                              <Button
-                                onClick={() => handleDeleteCustomer(customer.id)}
-                                variant="outline"
-                                className="bg-red-900/20 border-red-800/50 text-red-400 hover:bg-red-900/40 hover:text-red-300 px-4 py-2"
-                                disabled={actionLoading === `delete-${customer.id}`}
-                              >
-                                {actionLoading === `delete-${customer.id}` ? (
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                )}
-                                Delete Client
-                              </Button>
-                            </div>
+                          {/* Delete Client */}
+                          <div className="pt-4 border-t border-gray-800 flex justify-end">
+                            <Button
+                              onClick={() => handleDeleteCustomer(customer.id)}
+                              variant="outline"
+                              className="bg-red-900/20 border-red-800/50 text-red-400 hover:bg-red-900/40 hover:text-red-300 px-4 py-2"
+                              disabled={actionLoading === `delete-${customer.id}`}
+                            >
+                              {actionLoading === `delete-${customer.id}` ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4 mr-2" />
+                              )}
+                              Delete Client
+                            </Button>
                           </div>
                         </div>
                       )}

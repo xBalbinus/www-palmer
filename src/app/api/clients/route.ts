@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, clients, clientNotes, eq, desc } from "@/db";
+import { db, clients, clientNotes, exerciseLogs, eq, desc } from "@/db";
 import { createXORSUser, generateClientPassword } from "@/lib/xors-api";
 
 // GET /api/clients - List all clients
@@ -10,14 +10,21 @@ export async function GET() {
       .from(clients)
       .orderBy(desc(clients.createdAt));
 
-    // Fetch notes for each client
-    const clientsWithNotes = await Promise.all(
+    // Fetch notes and exercises for each client
+    const clientsWithData = await Promise.all(
       allClients.map(async (client) => {
-        const notes = await db
-          .select()
-          .from(clientNotes)
-          .where(eq(clientNotes.clientId, client.id))
-          .orderBy(desc(clientNotes.createdAt));
+        const [notes, exercises] = await Promise.all([
+          db
+            .select()
+            .from(clientNotes)
+            .where(eq(clientNotes.clientId, client.id))
+            .orderBy(desc(clientNotes.createdAt)),
+          db
+            .select()
+            .from(exerciseLogs)
+            .where(eq(exerciseLogs.clientId, client.id))
+            .orderBy(desc(exerciseLogs.createdAt)),
+        ]);
 
         return {
           id: client.id,
@@ -27,8 +34,6 @@ export async function GET() {
           sessionsRemaining: client.sessionsRemaining,
           totalSessions: client.totalSessions,
           goals: client.goals,
-          currentWeight: client.currentWeight ? parseFloat(client.currentWeight) : null,
-          targetWeight: client.targetWeight ? parseFloat(client.targetWeight) : null,
           lastSessionDate: client.lastSessionDate?.toISOString().split("T")[0] || null,
           createdAt: client.createdAt.toISOString().split("T")[0],
           xorsUserId: client.xorsUserId,
@@ -38,11 +43,20 @@ export async function GET() {
             date: n.createdAt.toISOString().split("T")[0],
             content: n.content,
           })),
+          exercises: exercises.map((e) => ({
+            id: e.id,
+            exercise: e.exercise,
+            weight: parseFloat(e.weight),
+            reps: e.reps,
+            sets: e.sets,
+            notes: e.notes,
+            date: e.createdAt.toISOString().split("T")[0],
+          })),
         };
       })
     );
 
-    return NextResponse.json({ clients: clientsWithNotes });
+    return NextResponse.json({ clients: clientsWithData });
   } catch (error) {
     console.error("Error fetching clients:", error);
     return NextResponse.json(
@@ -56,7 +70,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, phone, sessionsRemaining, goals, currentWeight, targetWeight } = body;
+    const { name, email, phone, sessionsRemaining, goals } = body;
 
     if (!name || !email) {
       return NextResponse.json(
@@ -94,8 +108,6 @@ export async function POST(request: NextRequest) {
         sessionsRemaining: sessionsRemaining || 0,
         totalSessions: sessionsRemaining || 0,
         goals: goals || null,
-        currentWeight: currentWeight ? currentWeight.toString() : null,
-        targetWeight: targetWeight ? targetWeight.toString() : null,
       })
       .returning();
 
@@ -108,13 +120,12 @@ export async function POST(request: NextRequest) {
         sessionsRemaining: newClient.sessionsRemaining,
         totalSessions: newClient.totalSessions,
         goals: newClient.goals,
-        currentWeight: newClient.currentWeight ? parseFloat(newClient.currentWeight) : null,
-        targetWeight: newClient.targetWeight ? parseFloat(newClient.targetWeight) : null,
         lastSessionDate: null,
         createdAt: newClient.createdAt.toISOString().split("T")[0],
         xorsUserId: newClient.xorsUserId,
         xorsApiKey: newClient.xorsApiKey,
         notes: [],
+        exercises: [],
       },
       // Include credentials so Palmer can share with client
       credentials: {

@@ -24,6 +24,15 @@ interface Note {
   content: string;
 }
 
+interface ExerciseLog {
+  id: string;
+  exercise: string;
+  weight: number;
+  reps: number;
+  sets: number;
+  date: string;
+}
+
 interface UserData {
   id: string;
   name: string;
@@ -32,11 +41,10 @@ interface UserData {
   sessionsRemaining: number;
   totalSessions: number;
   goals: string | null;
-  currentWeight: number | null;
-  targetWeight: number | null;
   lastSessionDate: string | null;
   createdAt: string;
   notes: Note[];
+  exercises: ExerciseLog[];
 }
 
 export default function DashboardPage() {
@@ -85,17 +93,15 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const weightToGo = user.currentWeight && user.targetWeight
-    ? Math.abs(user.currentWeight - user.targetWeight)
-    : null;
-  
-  const weightProgress = user.currentWeight && user.targetWeight
-    ? user.currentWeight > user.targetWeight
-      ? "lose"
-      : "gain"
-    : null;
-
   const sessionsUsed = user.totalSessions - user.sessionsRemaining;
+
+  // Group exercises by name to show personal records
+  const personalRecords = user.exercises?.reduce((acc, ex) => {
+    if (!acc[ex.exercise] || ex.weight > acc[ex.exercise].weight) {
+      acc[ex.exercise] = ex;
+    }
+    return acc;
+  }, {} as Record<string, ExerciseLog>) || {};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 text-white">
@@ -212,7 +218,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Goals & Progress */}
+          {/* Goals & Lift Progress */}
           <Card className="bg-gray-900/50 border-gray-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg flex items-center gap-2 text-gray-200">
@@ -223,41 +229,53 @@ export default function DashboardPage() {
             <CardContent className="space-y-4">
               {user.goals ? (
                 <div className="bg-gray-800/50 rounded-lg p-4">
-                  <p className="text-gray-300">{user.goals}</p>
+                  <p className="text-gray-300 whitespace-pre-wrap">{user.goals}</p>
                 </div>
               ) : (
                 <p className="text-gray-500 italic">No goals set yet</p>
               )}
 
-              {(user.currentWeight || user.targetWeight) && (
-                <div className="grid grid-cols-3 gap-3">
-                  {user.currentWeight && (
-                    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-                      <p className="text-gray-500 text-xs uppercase">Current</p>
-                      <p className="text-2xl font-bold text-white">{user.currentWeight}</p>
-                      <p className="text-gray-500 text-xs">lbs</p>
-                    </div>
-                  )}
-                  {user.targetWeight && (
-                    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-                      <p className="text-gray-500 text-xs uppercase">Target</p>
-                      <p className="text-2xl font-bold text-white">{user.targetWeight}</p>
-                      <p className="text-gray-500 text-xs">lbs</p>
-                    </div>
-                  )}
-                  {weightToGo !== null && (
-                    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-                      <p className="text-gray-500 text-xs uppercase">To {weightProgress}</p>
-                      <p className={`text-2xl font-bold ${weightProgress === "lose" ? "text-amber-400" : "text-green-400"}`}>
-                        {weightToGo}
-                      </p>
-                      <p className="text-gray-500 text-xs">lbs</p>
-                    </div>
-                  )}
+              {/* Personal Records */}
+              {Object.keys(personalRecords).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    Personal Records
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(personalRecords).slice(0, 4).map(([name, record]) => (
+                      <div key={name} className="bg-gray-800/50 rounded-lg p-3">
+                        <p className="text-gray-400 text-xs truncate">{name}</p>
+                        <p className="text-xl font-bold text-white">{record.weight}<span className="text-sm text-gray-500">lbs</span></p>
+                        <p className="text-xs text-gray-500">{record.reps} reps × {record.sets} sets</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {!user.goals && !user.currentWeight && !user.targetWeight && (
+              {/* Recent Lifts */}
+              {user.exercises && user.exercises.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-blue-400" />
+                    Recent Lifts
+                  </h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {user.exercises.slice(0, 5).map((ex) => (
+                      <div key={ex.id} className="flex justify-between items-center bg-gray-800/30 rounded px-3 py-2">
+                        <span className="text-white text-sm">{ex.exercise}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-green-400 font-mono text-sm">{ex.weight}lbs × {ex.reps}</span>
+                          <span className="text-gray-600 text-xs">{ex.date}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!user.goals && (!user.exercises || user.exercises.length === 0) && (
                 <p className="text-gray-500 text-sm">
                   Talk to Coach Palmer to set your fitness goals!
                 </p>
