@@ -3,7 +3,7 @@
  * Handles communication with the XORS user management API
  */
 
-const XORS_API_URL = process.env.XORS_API_URL || "https://api.xors.app";
+const XORS_API_URL = process.env.XORS_API_URL || "https://api.xors.xyz";
 
 interface XORSUser {
   id: string;
@@ -55,7 +55,14 @@ export async function createXORSUser(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Unknown error" }));
+    const errorText = await response.text();
+    console.error("XORS API Response:", response.status, errorText);
+    let error = { message: "Unknown error" };
+    try {
+      error = JSON.parse(errorText);
+    } catch {
+      error = { message: errorText || "Unknown error" };
+    }
     throw new XORSAPIError(response.status, error.message || "Failed to create user");
   }
 

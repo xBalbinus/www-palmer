@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles, Phone } from "lucide-react";
+import { ArrowRight, Target, Zap, Users, CheckCircle2, Calendar, TrendingUp, Award, Sparkles, Phone, LogIn } from "lucide-react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import Image from "next/image";
 
@@ -164,6 +165,15 @@ export default function Home() {
               <a href="tel:+1234567890" className="md:hidden bg-red-800/90 hover:bg-red-900 text-white p-2 rounded-full transition-all shadow-sm hover:shadow-md">
                 <Phone className="w-4 h-4" />
               </a>
+
+              {/* Client Login Button */}
+              <Link
+                href="/login"
+                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition-all"
+                title="Client Login"
+              >
+                <LogIn className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Link>
             </div>
           </div>
         </div>
