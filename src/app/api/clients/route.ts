@@ -73,11 +73,12 @@ export async function POST(request: NextRequest) {
     try {
       const response = await createXORSUser(email, clientPassword);
       xorsUser = response.user;
-    } catch (error: any) {
+    } catch (error) {
       console.error("XORS API error:", error);
+      const err = error as { message?: string; statusCode?: number };
       return NextResponse.json(
-        { error: error.message || "Failed to create user in XORS system" },
-        { status: error.statusCode || 500 }
+        { error: err.message || "Failed to create user in XORS system" },
+        { status: err.statusCode || 500 }
       );
     }
 

@@ -63,7 +63,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 

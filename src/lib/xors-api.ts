@@ -4,7 +4,6 @@
  */
 
 const XORS_API_URL = process.env.XORS_API_URL || "https://api.xors.app";
-const PALMER_API_KEY = process.env.PALMER_API_KEY!; // Palmer's API key for creating users
 
 interface XORSUser {
   id: string;
