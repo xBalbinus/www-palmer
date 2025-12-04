@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db, clients, eq } from "@/db";
 
-const XORS_API_URL = process.env.XORS_API_URL || "https://api.xors.app";
+const XORS_API_URL = process.env.XORS_API_URL || "https://api.xors.xyz";
 
 export async function PUT(request: NextRequest) {
   try {
