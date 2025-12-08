@@ -32,7 +32,6 @@ export default function SettingsPage() {
 
   // Form state
   const [phone, setPhone] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -92,8 +91,8 @@ export default function SettingsPage() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setMessage({ type: "error", text: "Password must be at least 8 characters" });
+    if (newPassword.length < 4) {
+      setMessage({ type: "error", text: "Password must be at least 4 characters" });
       return;
     }
 
@@ -104,7 +103,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/auth/change-password", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify({ newPassword }),
       });
 
       if (!response.ok) {
@@ -113,7 +112,6 @@ export default function SettingsPage() {
       }
 
       setMessage({ type: "success", text: "Password changed successfully!" });
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
@@ -266,20 +264,6 @@ export default function SettingsPage() {
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-800 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
                     New Password
                   </label>
                   <input
@@ -289,7 +273,7 @@ export default function SettingsPage() {
                     placeholder="••••••••"
                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-800 focus:border-transparent"
                     required
-                    minLength={8}
+                    minLength={4}
                   />
                 </div>
 

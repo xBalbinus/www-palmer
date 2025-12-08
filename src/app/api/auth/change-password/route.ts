@@ -22,11 +22,18 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { currentPassword, newPassword } = body;
+    const { newPassword } = body;
 
-    if (!currentPassword || !newPassword) {
+    if (!newPassword) {
       return NextResponse.json(
-        { error: "Current password and new password are required" },
+        { error: "New password is required" },
+        { status: 400 }
+      );
+    }
+
+    if (newPassword.length < 4) {
+      return NextResponse.json(
+        { error: "Password must be at least 4 characters" },
         { status: 400 }
       );
     }
@@ -42,7 +49,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Call XORS API to change password
+    // Call XORS API to change password (just sends new password, authenticated via API key)
     const response = await fetch(`${XORS_API_URL}/api/users/update-viewer-password`, {
       method: "POST",
       headers: {
@@ -50,15 +57,14 @@ export async function PUT(request: NextRequest) {
         "X-API-Key": client.xorsApiKey || "",
       },
       body: JSON.stringify({
-        password: currentPassword,
-        new_password: newPassword,
+        password: newPassword,
       }),
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: "Password change failed" }));
       return NextResponse.json(
-        { error: error.message || "Current password is incorrect" },
+        { error: error.message || "Password change failed" },
         { status: response.status }
       );
     }
